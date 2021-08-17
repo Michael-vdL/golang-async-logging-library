@@ -57,15 +57,15 @@ func (al Alog) formatMessage(msg string) string {
 
 func (al Alog) write(msg string, wg *sync.WaitGroup) {
 	al.m.Lock()
+	defer al.m.Unlock()
 	var fmsg = al.formatMessage(msg)
 	_, err := al.dest.Write([]byte(fmsg))
 	if err != nil {
-		// Confused at 8 and 9?
-		
-		al.errorCh <- err
+		go func(al Alog) {
+			al.errorCh <- err
+			}(al)
+		}
 	}
-	al.m.Unlock()
-}
 
 func (al Alog) shutdown() {
 }
