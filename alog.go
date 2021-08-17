@@ -28,15 +28,24 @@ func New(w io.Writer) *Alog {
 	if w == nil {
 		w = os.Stdout
 	}
+	var msgCh = make(chan string)
+	var errCh = make(chan error)
+	var m = &sync.Mutex{}
 	return &Alog{
 		dest: w,
+		msgCh: msgCh,
+		errorCh: errCh,
+		m: m,
 	}
 }
 
 // Start begins the message loop for the asynchronous logger. It should be initiated as a goroutine to prevent
 // the caller from being blocked.
 func (al Alog) Start() {
-
+	for {
+		msg := <-al.msgCh
+			go al.write(msg, nil)
+}
 }
 
 func (al Alog) formatMessage(msg string) string {
@@ -47,21 +56,30 @@ func (al Alog) formatMessage(msg string) string {
 }
 
 func (al Alog) write(msg string, wg *sync.WaitGroup) {
+	al.m.Lock()
+	var fmsg = al.formatMessage(msg)
+	_, err := al.dest.Write([]byte(fmsg))
+	if err != nil {
+		// Confused at 8 and 9?
+		
+		al.errorCh <- err
+	}
+	al.m.Unlock()
 }
 
 func (al Alog) shutdown() {
 }
 
 // MessageChannel returns a channel that accepts messages that should be written to the log.
-func (al Alog) MessageChannel() chan string {
-	return nil
+func (al Alog) MessageChannel() chan<- string {
+	return al.msgCh
 }
 
 // ErrorChannel returns a channel that will be populated when an error is raised during a write operation.
 // This channel should always be monitored in some way to prevent deadlock goroutines from being generated
 // when errors occur.
-func (al Alog) ErrorChannel() chan error {
-	return nil
+func (al Alog) ErrorChannel() <-chan error {
+	return al.errorCh
 }
 
 // Stop shuts down the logger. It will wait for all pending messages to be written and then return.
